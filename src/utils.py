@@ -1,11 +1,11 @@
 from functools import wraps
 
 import matplotlib.pyplot as plt
+from telegram import ChatAction
 
 
 def create_graph(data, out, to, start, finish, filepath):
     # unpack X and Y values - dates and amounts
-    print(data)
     x_values = list(data["rates"].keys())
     y_values = [float(values[out]) for values in data["rates"].values()]
 

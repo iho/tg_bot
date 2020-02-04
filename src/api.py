@@ -1,14 +1,13 @@
 import requests
 
 
-def get_rate_data(currency="USD"):
+def get_rates_data(currency="USD"):
     data = requests.get(
         url=f"https://api.exchangeratesapi.io/latest?base={currency}"
     ).json()
     return data["rates"]
 
 
-# handler for exchange data args
 def get_exchange_data(out="USD", to="GBP", amount=1):
     out = check_if_symbol(out)
     to = check_if_symbol(to)

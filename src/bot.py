@@ -1,6 +1,8 @@
 import logging
 import os
+from datetime import datetime, timedelta
 
+from pymongo import MongoClient
 from telegram import (
     ChatAction,
     InlineKeyboardButton,
@@ -10,7 +12,10 @@ from telegram import (
 )
 from telegram.ext import CallbackQueryHandler, CommandHandler, Updater
 
+import api
 from utils import *
+
+rates_collection = MongoClient("localhost", 27017).currency_bot.rates_collection
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -28,6 +33,32 @@ Use `/history CURRENCY_1/CURRENCY_2 7 days` to get graph of currencies relation 
 """
 
 
+@typing
+def get_list(update, context):
+    currency = "USD"
+    previous_rates = rates_collection.find_one({"base": currency})
+    now = datetime.now()
+    if not previous_rates.get("date"):
+        previous_rates["date"] = now
+    if not previous_rates or (now + timedelta(minutes=10) >= previous_rates["date"]):
+        rates = api.get_rates_data(currency)
+        data = {"rates": rates, "date": datetime.now()}
+        rates_collection.find_one_and_update(
+            query={"base": currency}, update={"$set": data}, upsert=True
+        )
+    else:
+        rates = previous_rates["rates"]
+
+    response = "```\n"
+    for (currency, price) in rates.items():
+        response += f"{currency}: {price:.2f}\n"
+    response += "\n```"
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id, text=response, parse_mode=ParseMode.MARKDOWN
+    )
+
+
 def start_handler(update, context):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -41,5 +72,6 @@ if __name__ == "__main__":
     updater = Updater(token=TOKEN, use_context=True)
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CommandHandler("start", start_handler))
+    dispatcher.add_handler(CommandHandler("list", get_list))
     updater.start_polling()
     updater.idle()
