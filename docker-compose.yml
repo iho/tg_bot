@@ -1,0 +1,9 @@
+bot:
+  build: ./src
+  command: python -u bot.py
+  env_file:
+      - .env
+  links:
+    - db
+db:
+  image: mongo:latest

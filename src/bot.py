@@ -11,7 +11,7 @@ import api
 from symbols import avaliable_periods
 from utils import create_graph, format_date, typing, uploading
 
-rates_collection = MongoClient("localhost", 27017).currency_bot.rates_collection
+rates_collection = MongoClient(os.environ['DB_PORT_27017_TCP_ADDR'], 27017).currency_bot.rates_collection
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
