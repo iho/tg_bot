@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import requests
 
 import symbols
@@ -26,5 +28,8 @@ def get_exchange_data(out, to):
     return response.json()["rates"]
 
 
-def format_date(date):
-    return date.strftime("%Y-%m-%d")
+def get_history_data(start, now, out="USD", to="EUR"):
+    return requests.get(
+        f"https://api.exchangeratesapi.io/history?"
+        f"start_at={start}&end_at={now}&base={to}&symbols={out}"
+    ).json()["rates"]

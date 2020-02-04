@@ -1,19 +1,15 @@
 import logging
 import os
+import tempfile
 from datetime import datetime, timedelta
 
 from pymongo import MongoClient
-from telegram import (
-    ChatAction,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    ParseMode,
-    bot,
-)
-from telegram.ext import CallbackQueryHandler, CommandHandler, Updater
+from telegram import ParseMode
+from telegram.ext import CommandHandler, Updater
 
 import api
-from utils import *
+from symbols import avaliable_periods
+from utils import create_graph, format_date, typing, uploading
 
 rates_collection = MongoClient("localhost", 27017).currency_bot.rates_collection
 
@@ -21,7 +17,7 @@ logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 greeting_message = """
 Welcome to Currency Exchange bot!
@@ -36,13 +32,15 @@ Use `/history CURRENCY_1/CURRENCY_2 7 days` to get graph of currencies relation 
 @typing
 def get_list_handler(update, context):
     currency = "USD"
-    response = 'Some error happened. Sorry for inconvenience.'
+    response = "Some error happened. Sorry for inconvenience."
     try:
         previous_rates = rates_collection.find_one({"base": currency})
         now = datetime.now()
         if not previous_rates.get("date"):
             previous_rates["date"] = now
-        if not previous_rates or (now + timedelta(minutes=10) >= previous_rates["date"]):
+        if not previous_rates or (
+            now + timedelta(minutes=10) >= previous_rates["date"]
+        ):
             rates = api.get_rates_data(currency)
             data = {"rates": rates, "date": datetime.now()}
             rates_collection.find_one_and_update(
@@ -74,13 +72,13 @@ def start_handler(update, context):
 @typing
 def exchange_handler(update, context):
     args = context.args
-    if 'to' in args:
-        args.remove('to')
+    if "to" in args:
+        args.remove("to")
     rates = None
     out = "USD"
     to = "GBP"
     amount = 0
-    response = 'Some error happened. Sorry for inconvenience.'
+    response = "Some error happened. Sorry for inconvenience."
     if len(args) == 3:
         amount, out, to = args
         amount = float(amount)
@@ -92,7 +90,7 @@ def exchange_handler(update, context):
         amount = float(args[0][1:])
         to = args[-1].upper()
     else:
-        response = 'Please, use `/exchange AMOUNT CURRENCY_1 CURRENCY_2` format.'
+        response = "Please, use `/exchange AMOUNT CURRENCY_1 CURRENCY_2` format."
     try:
         rates = api.get_exchange_data(out, to)
     except Exception as e:
@@ -101,10 +99,40 @@ def exchange_handler(update, context):
         total = amount * rates[to]
         response = f"{amount} {out} equals {total:.2f} {to}"
     context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=response,
-        parse_mode=ParseMode.MARKDOWN
+        chat_id=update.effective_chat.id, text=response, parse_mode=ParseMode.MARKDOWN
     )
+
+
+@uploading
+def history_handler(update, context):
+    args = context.args
+    if "for" in args:
+        args.remove("for")
+
+    try:
+        pair, duration, period = args
+        out, to = pair.split("/")
+        duration = int(duration)
+        if period not in avaliable_periods:
+            period = "days"
+        now = format_date(datetime.now())
+        start = format_date(datetime.now() - timedelta(**{period: duration}))
+        rates = api.get_history_data(start, now, out, to)
+
+        with tempfile.NamedTemporaryFile() as tmp_file:
+            create_graph(rates, out, to, start, now, tmp_file.name)
+            tmp_file.seek(0)
+            context.bot.send_photo(
+                chat_id=update.effective_chat.id, photo=open(tmp_file.name, "rb")
+            )
+    except Exception as e:
+        logger.exception(e)
+        response = "No exchange rate data is available for the selected currency"
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=response,
+            parse_mode=ParseMode.MARKDOWN,
+        )
 
 
 if __name__ == "__main__":
@@ -114,7 +142,8 @@ if __name__ == "__main__":
     dispatcher.add_handler(CommandHandler("start", start_handler))
     dispatcher.add_handler(CommandHandler("list", get_list_handler))
     dispatcher.add_handler(CommandHandler("lst", get_list_handler))
-    dispatcher.add_handler(CommandHandler('help', start_handler))
-    dispatcher.add_handler(CommandHandler('exchange', exchange_handler))
+    dispatcher.add_handler(CommandHandler("help", start_handler))
+    dispatcher.add_handler(CommandHandler("exchange", exchange_handler))
+    dispatcher.add_handler(CommandHandler("history", history_handler))
     updater.start_polling()
     updater.idle()
