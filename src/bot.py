@@ -34,7 +34,7 @@ def get_list_handler(update, context):
     currency = "USD"
     response = "Some error happened. Sorry for inconvenience."
     try:
-        previous_rates = rates_collection.find_one({"base": currency})
+        previous_rates = rates_collection.find_one({"base": currency}) or {}
         now = datetime.now()
         if not previous_rates.get("date"):
             previous_rates["date"] = now
